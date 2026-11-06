@@ -79,12 +79,13 @@ script:
   ps5_autojb_tv_notice:
     alias: PS5 auto-jailbreak — show a notice on the TV (optional)
     description: >-
-      Called with title/message for progress and results. Does nothing until you wire it to your TV, for example
-      QuickBars or "Notifications for Android TV" on a Shield.
+      Called with title/message for progress and results, and the ready screenshot's URL as image. Does nothing until
+      you wire it to your TV, for example QuickBars or "Notifications for Android TV" on a Shield.
     mode: queued
     fields:
       title: {example: PS5 ready}
       message: {example: Jailbreak complete.}
+      image: {example: 'http://helper.lan:8091/api/screenshots/autojb-ready.png'}
     sequence: []
 
   ps5_autojb_full_shutdown:
@@ -166,6 +167,7 @@ automation:
     data:
       title: PS5 ready
       message: Jailbreak complete.
+      image: "{{ trigger.to_state.attributes.get('preview') or '' }}"
 
 - id: ps5_autojb_progress
   alias: PS5 auto-jailbreak — progress

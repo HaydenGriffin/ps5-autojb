@@ -11,7 +11,7 @@ from homeassistant.util import dt as dt_util
 PKG = yaml.safe_load((Path(__file__).resolve().parents[2] / 'homeassistant/ps5_autojb.yaml').read_text())
 
 
-async def setup(hass, calls):
+async def setup(hass, calls, scripts=None):
     async def record(call: ServiceCall):
         data = dict(call.data)
         if 'payload' in data:  # what mqtt.publish's cv.string does with a rendered template
@@ -20,7 +20,7 @@ async def setup(hass, calls):
     for dom, svc in [('mqtt', 'publish'), ('notify', 'mobile_app_your_phone'), ('button', 'press'),
                      ('switch', 'turn_off'), ('switch', 'turn_on')]:
         hass.services.async_register(dom, svc, record)
-    assert await async_setup_component(hass, 'script', {'script': PKG['script']})
+    assert await async_setup_component(hass, 'script', {'script': {**PKG['script'], **(scripts or {})}})
     assert await async_setup_component(hass, 'automation', {'automation': PKG['automation']})
     await hass.async_block_till_done()
 
@@ -87,3 +87,22 @@ async def test_failure_notifies_with_run_button(hass):
     await hass.async_block_till_done()
     asks = [d for s, d in calls if s == 'notify.mobile_app_your_phone' and 'actions' in d['data']]
     assert asks and 'no confirmation' in asks[-1]['message']
+
+
+async def test_ready_passes_the_screenshot_to_the_tv_notice(hass):
+    """The ready message hands the TV hook its picture; the docs' wiring example turns it into an image URL."""
+    calls = []
+
+    async def tv(call: ServiceCall):
+        calls.append(('tv', dict(call.data)))
+    hass.services.async_register('notify', 'your_android_tv', tv)
+    example = (Path(__file__).resolve().parents[2] / 'docs/notifications.md').read_text()
+    example = example.split('```yaml\n', 1)[1].split('```', 1)[0]
+    await setup(hass, calls, scripts=yaml.safe_load(example))
+    hass.states.async_set('sensor.ps5_autojb_result', 'checking PS5', {'source': 'automatic'})
+    await hass.async_block_till_done()
+    hass.states.async_set('sensor.ps5_autojb_result', 'jailbreak confirmed',
+                          {'launched': True, 'at': 'now', 'preview': 'http://x/ready.png'})
+    await hass.async_block_till_done()
+    tv = [d for s, d in calls if s == 'tv']
+    assert tv[-1]['title'] == 'PS5 ready' and tv[-1]['data'] == {'image': {'url': 'http://x/ready.png'}}

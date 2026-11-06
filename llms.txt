@@ -1,0 +1,47 @@
+# ps5-autojb
+
+> Keeps a jailbroken PS5 ready without anyone at the console. A Python service next to refree (a Remote Play client)
+> opens the jailbreak app by its on-screen name, restarts and power-recovers the console when the jailbreak crashes it,
+> and reports each step to Home Assistant over MQTT. Optional parts: a smart plug, an ESP32 Bluetooth waker, a rooted
+> LG TV that presses X over HDMI-CEC, and named run paths such as Boot Linux.
+
+Notes for an assistant helping someone set this up:
+
+- Follow docs/setup.md in order and run each step's check before the next one. Steps 1 to 4 are the minimum; 5 to 8
+  are optional.
+- The repo contains no exploit or payload. The user's PS5 must already jailbreak from an app on its home screen.
+- refree must run with `--no-auto-macro`, and its web API (port 8091) has no login: keep it on the LAN.
+- `autojb.json` refuses unknown keys. `target_name` must match the tile's title as the PS5 displays it.
+- Never suggest cutting power to a console in rest mode. The launcher won't: it cuts power only under `off_watts` or
+  over `hung_watts` (a console silent for three minutes), and rest mode sits between them.
+- The Bluetooth waker needs an original ESP32 (Bluetooth Classic). S2, S3, C3 and C6 boards don't work. Read the
+  controller's addresses on Linux, not macOS.
+- The TV X press works only on a rooted LG webOS TV. Without one, the user gets a notification to press X.
+- Tested on one setup (PS5 with Y2JB, Tapo P110, ESP-WROOM-32, LG C1, Android phone). OCR crops assume the English UI
+  and 640×360 Remote Play frames.
+
+## Docs
+
+- [README](README.md): what it does, the parts, run path steps, limitations
+- [Setup](docs/setup.md): step by step, with a check after each step
+- [How it works](docs/how-it-works.md): one automatic pass, the failure handling, the durable limits, lessons from testing
+- [Notifications](docs/notifications.md): every message, its button, and the TV notice hook
+
+## Config and code
+
+- [autojb.example.json](launcher/autojb.example.json): launcher settings
+- [paths.example.json](launcher/paths.example.json): the Boot Linux run path
+- [ps5_autojb.py](launcher/ps5_autojb.py): the launcher (single file; `main()` and `configure()` show the options)
+- [ps5_autojb.yaml](homeassistant/ps5_autojb.yaml): the Home Assistant package; edit the lines marked EDIT
+- [ps5-autojb.service](systemd/ps5-autojb.service): systemd unit
+
+## Hardware
+
+- [Bluetooth waker](esphome/README.md): refree's bt-waker on an ESP32, and reading the addresses
+- [TV X press](tv/README.md): HDMI-CEC from a rooted LG TV, with a forced-command SSH key
+- [read_dualsense.py](tools/read_dualsense.py): reads the controller's and console's Bluetooth addresses
+
+## Optional
+
+- [Notes for refree's maintainers](docs/upstream/refree-issues.md): the segfault, and features that would help
+- [refree](https://gitlab.com/refree/refree): the Remote Play client this builds on

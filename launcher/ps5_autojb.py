@@ -8,7 +8,7 @@ Runs next to refree (https://gitlab.com/refree/refree) and talks to Home Assista
   plug (never in rest mode or at standby power), within durable daily limits.
 - After an unclean power-off, an optional rooted LG TV presses X over HDMI-CEC on the "wasn't turned off properly"
   screen; otherwise the owner is asked.
-Settings: an optional autojb.json next to refree's config.json (see config.example.json).
+Settings: an optional autojb.json next to refree's config.json (see autojb.example.json).
 Ubuntu dependencies: python3-pil, python3-paho-mqtt, tesseract-ocr-eng.
 """
 import argparse
