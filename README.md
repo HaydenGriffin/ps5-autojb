@@ -59,6 +59,13 @@ flowchart LR
   TV -. HDMI-CEC .-> PS5
 ```
 
+## In Home Assistant
+
+<img src="docs/images/ha-device.png" alt="Home Assistant device page for PS5 auto-jailbreak with its controls, sensors, diagnostics, related automations and activity" width="640">
+
+The launcher's device, from its own MQTT discovery. Every entity, the package, and a dashboard card are in
+[docs/home-assistant.md](docs/home-assistant.md).
+
 ## Setup
 
 [docs/setup.md](docs/setup.md) goes through it in order, with a check after each step. In short:

@@ -39,6 +39,12 @@ Check: Settings → Automations shows six "PS5 auto-jailbreak" automations, all 
 
 All on one device, "PS5 auto-jailbreak". They go `unavailable` when the launcher stops.
 
+<img src="images/ha-device.png" alt="Home Assistant device page for PS5 auto-jailbreak: Controls (Automatic jailbreak, Boot Linux, Run jailbreak), Sensors (Console power rest, Jailbreak ready off), Configuration (Discover titles), Diagnostic (Last jailbreak result: jailbreak confirmed, Titles 24), related automations and activity" width="720">
+
+A test Home Assistant 2026.10 running this package, fed the launcher's own MQTT discovery and the real console's
+states at 17:16 on 6 November: jailbroken and in rest mode. Rest mode keeps the jailbreak, but the probe port
+doesn't answer, so Jailbreak ready reads off until the console wakes.
+
 | Entity | What it is |
 |---|---|
 | `switch.ps5_autojb_auto` | Automatic jailbreak. Off: no automatic launches and no recovery, and anything running stops. Survives restarts. |
@@ -116,14 +122,19 @@ The recovery power step refuses, and tells the launcher why, when:
 
 ## A dashboard card
 
-Built-in cards only. Change or drop the Boot Linux tile to match your paths.
+Built-in cards only. Change or drop the Boot Linux tile to match your paths. Buttons and the shutdown script hide
+their state: a button's state is only when it was last pressed.
+
+<img src="images/ha-card.png" alt="The dashboard card below: Jailbreak ready off, Console rest, Automatic on, Run jailbreak, Boot Linux, Turn off PS5, Last result jailbreak confirmed" width="400">
+
+The card below, rendered by the same test Home Assistant.
 
 ```yaml
 type: vertical-stack
 cards:
   - type: tile
     entity: binary_sensor.ps5_autojb_ready
-    name: Jailbreak
+    name: Jailbreak ready
   - type: grid
     columns: 2
     square: false
@@ -137,6 +148,7 @@ cards:
       - type: tile
         entity: button.ps5_autojb_launch
         name: Run jailbreak
+        hide_state: true
         tap_action:
           action: perform-action
           perform_action: button.press
@@ -144,6 +156,7 @@ cards:
       - type: tile
         entity: button.ps5_autojb_path_linux
         name: Boot Linux
+        hide_state: true
         tap_action:
           action: perform-action
           perform_action: button.press
@@ -154,6 +167,7 @@ cards:
     entity: script.ps5_autojb_full_shutdown
     name: Turn off PS5
     icon: mdi:power
+    hide_state: true
     tap_action:
       action: perform-action
       perform_action: script.ps5_autojb_full_shutdown
@@ -163,7 +177,6 @@ cards:
     entities:
       - entity: sensor.ps5_autojb_result
         name: Last result
-        secondary_info: last-changed
 ```
 
 ## Checking it end to end
