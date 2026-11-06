@@ -3,6 +3,8 @@
 Everything goes through one script, `script.ps5_autojb_notify`, using the Home Assistant companion app for Android.
 Every message has the tag `ps5-autojb`, so each one replaces the last instead of stacking.
 
+<img src="images/android-ready.png" alt="The PS5 jailbreak ready notification, expanded, with its screenshot" width="420">
+
 | When | Title | Kind |
 |---|---|---|
 | An automatic pass starts | PS5 jailbreak starting | status (expires after 5 min) |

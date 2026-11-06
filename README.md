@@ -11,6 +11,10 @@ wait for rest mode, and a PS button press. All of that runs from one button.
 It is built on [refree](https://gitlab.com/refree/refree), which handles Remote Play. There is no exploit code or
 payload in this repo; it opens apps that are already on your console.
 
+<img src="docs/images/android-ready.png" alt="Android notification: PS5 jailbreak ready. The jailbreak finished successfully. Your PS5 is ready. Below it, a screenshot of the PS5 after the jailbreak" width="440">
+
+The ready notification on an Android phone, with the PS5's screen when the jailbreak confirmed.
+
 ## What it does
 
 - **Launch by name.** Opens the Media tab and reads each tile's title with OCR. It presses X only when two frames read
