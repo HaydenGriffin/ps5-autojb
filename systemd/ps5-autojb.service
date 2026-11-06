@@ -1,0 +1,14 @@
+[Unit]
+Description=ps5-autojb: keep the PS5 jailbroken through refree's Remote Play
+After=network-online.target refree.service
+Wants=network-online.target
+
+[Service]
+# Same user as refree: it reads refree's config.json (console host, MQTT login) and keeps its state next to it.
+User=refree
+ExecStart=/usr/bin/python3 /opt/ps5-autojb/ps5_autojb.py --serve --config /var/lib/refree/.config/refree/config.json
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

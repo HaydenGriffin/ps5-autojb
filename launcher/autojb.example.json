@@ -1,0 +1,10 @@
+{
+  "target_name": "Y2JB - Gaming",
+  "mqtt_prefix": "ps5_autojb",
+  "max_tiles": 24,
+  "remote_play_url": "http://127.0.0.1:8091",
+  "public_url": "http://helper.lan:8091",
+  "tv_host": "lg-tv.lan",
+  "off_watts": 2.0,
+  "hung_watts": 30.0
+}

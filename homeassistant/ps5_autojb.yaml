@@ -1,0 +1,357 @@
+# ps5-autojb: the Home Assistant half. Put this file in /config/packages/ (packages: !include_dir_named packages).
+#
+# The launcher (launcher/ps5_autojb.py) creates its own entities over MQTT discovery:
+#   button.ps5_autojb_launch        Run jailbreak
+#   sensor.ps5_autojb_result        Last jailbreak result (attributes: source, at, launched, preview)
+#   binary_sensor.ps5_autojb_ready  Jailbreak ready (the exploit's port answers)
+#   switch.ps5_autojb_auto          Automatic jailbreak (off = hands off: no launches, no recovery)
+#   sensor.ps5_autojb_power         Console power (awake, app, rest, offline, unknown)
+#
+# EDIT before use:
+#   1. script.ps5_autojb_notify: your phone's notify service (Home Assistant companion app for Android).
+#   2. The power hardware, if your entity ids differ (rename the entities, or replace these ids below):
+#        switch.ps5_power_plug, sensor.ps5_power_plug_current_power   a smart plug with power monitoring
+#        button.ps5_bt_waker_power_on, sensor.ps5_bt_waker_status     the ESP32 Bluetooth waker (esphome/)
+#   3. The topics, if you changed mqtt_prefix in autojb.json (default ps5_autojb).
+#
+# Activation: a restart, or YAML reload for "MQTT entities", "Automations" and "Scripts".
+
+mqtt:
+  sensor:
+  # The launcher's power-step requests. The request id is the state, so each new request is a state change.
+  - name: PS5 recovery request
+    unique_id: ps5_autojb_recovery_request
+    default_entity_id: sensor.ps5_autojb_recovery_request
+    state_topic: ps5_autojb/recover/request
+    value_template: "{{ value_json.id }}"
+    json_attributes_topic: ps5_autojb/recover/request
+    entity_category: diagnostic
+    icon: mdi:power-cycle
+  - name: PS5 shutdown result
+    unique_id: ps5_autojb_shutdown_result
+    default_entity_id: sensor.ps5_autojb_shutdown_result
+    state_topic: ps5_autojb/shutdown/result
+    value_template: "{{ value_json.state }}"
+    json_attributes_topic: ps5_autojb/shutdown/result
+    icon: mdi:power
+
+script:
+  ps5_autojb_notify:
+    alias: PS5 auto-jailbreak — notify my phone
+    description: >-
+      One place for every PS5 message. level: status (replaced by the next message, expires), ask (needs you; has a
+      Run jailbreak button) or done. clear: remove the current message. Uses the Android companion app's tag, so each
+      message replaces the last one instead of stacking.
+    mode: queued
+    fields:
+      title: {example: PS5 jailbreak ready}
+      message: {example: Your PS5 is ready.}
+      level: {example: status}
+      image: {example: 'http://helper.lan:8091/api/screenshots/autojb-ready.png'}
+      clear: {example: false}
+    sequence:
+    - variables:
+        target: notify.mobile_app_your_phone   # EDIT: your phone's notify service
+    - if:
+      - condition: template
+        value_template: '{{ clear | default(false) }}'
+      then:
+      - action: '{{ target }}'
+        data:
+          message: clear_notification
+          data: {tag: ps5-autojb}
+      else:
+      - action: '{{ target }}'
+        data:
+          title: '{{ title }}'
+          message: '{{ message }}'
+          data: >-
+            {%- set d = {'tag': 'ps5-autojb', 'channel': 'PS5', 'alert_once': level == 'status',
+                         'notification_icon': 'mdi:sony-playstation', 'color': '#0070d1',
+                         'clickAction': '/config/devices/dashboard'} -%}
+            {%- if level == 'status' -%}{%- set d = dict(d, timeout=300) -%}{%- endif -%}
+            {%- if level == 'ask' -%}
+              {%- set d = dict(d, importance='high', actions=[{'action': 'PS5_AUTOJB_RUN', 'title': 'Run jailbreak'}]) -%}
+            {%- endif -%}
+            {%- if image | default('') -%}{%- set d = dict(d, image=image) -%}{%- endif -%}
+            {{ d }}
+
+  ps5_autojb_tv_notice:
+    alias: PS5 auto-jailbreak — show a notice on the TV (optional)
+    description: >-
+      Called with title/message for progress and results. Does nothing until you wire it to your TV, for example
+      QuickBars or "Notifications for Android TV" on a Shield.
+    mode: queued
+    fields:
+      title: {example: PS5 ready}
+      message: {example: Jailbreak complete.}
+    sequence: []
+
+  ps5_autojb_full_shutdown:
+    alias: PS5 auto-jailbreak — turn the PS5 fully off
+    description: >-
+      A fresh one-time request (32-hex id, timestamp). The launcher only acts on it within 30 seconds, navigates the
+      Power menu by OCR and selects Turn Off PS5 after two matching reads. Never Rest Mode.
+    mode: single
+    sequence:
+    - variables:
+        request_id: >-
+          {%- set ns = namespace(id='') -%}
+          {%- for _ in range(32) -%}{%- set ns.id = ns.id ~ ('0123456789abcdef' | random) -%}{%- endfor -%}
+          {{ ns.id }}
+    - action: mqtt.publish
+      data:
+        topic: ps5_autojb/shutdown
+        retain: false
+        payload: "{{ {'id': request_id, 'at': as_timestamp(now())} | to_json }}"
+
+automation:
+- id: ps5_autojb_run_from_notification
+  alias: PS5 auto-jailbreak — Run jailbreak from the phone
+  triggers:
+  - trigger: event
+    event_type: mobile_app_notification_action
+    event_data: {action: PS5_AUTOJB_RUN}
+  actions:
+  - action: button.press
+    target: {entity_id: button.ps5_autojb_launch}
+
+- id: ps5_autojb_stopped
+  alias: PS5 auto-jailbreak — stopped
+  description: One message after an automatic pass stops. Reconnects and retained results never repeat it.
+  mode: single
+  triggers:
+  - trigger: state
+    entity_id: sensor.ps5_autojb_result
+  conditions:
+  - condition: template
+    value_template: >-
+      {{ trigger.to_state is not none and trigger.from_state is not none
+         and trigger.from_state.state not in ['unknown', 'unavailable']
+         and trigger.to_state.attributes.get('source') == 'automatic'
+         and (trigger.to_state.state != trigger.from_state.state
+              or trigger.to_state.attributes.get('at') != trigger.from_state.attributes.get('at'))
+         and (trigger.to_state.state.startswith('failed:') or trigger.to_state.state.startswith('refused:')) }}
+  actions:
+  - action: script.ps5_autojb_notify
+    data:
+      level: ask
+      title: PS5 jailbreak needs attention
+      message: Automatic launch stopped. {{ trigger.to_state.state }}. Check the PS5 screen before trying again.
+
+- id: ps5_autojb_ready
+  alias: PS5 auto-jailbreak — ready
+  description: Once per confirmed launch, with a fresh screenshot of the console when one was captured.
+  mode: single
+  triggers:
+  - trigger: state
+    entity_id: sensor.ps5_autojb_result
+  conditions:
+  - condition: template
+    value_template: >-
+      {{ trigger.to_state is not none and trigger.from_state is not none
+         and trigger.from_state.state not in ['unknown', 'unavailable']
+         and trigger.to_state.state == 'jailbreak confirmed'
+         and trigger.to_state.attributes.get('launched') == true
+         and (trigger.to_state.state != trigger.from_state.state
+              or trigger.to_state.attributes.get('at') != trigger.from_state.attributes.get('at')) }}
+  actions:
+  - action: script.ps5_autojb_notify
+    data:
+      level: done
+      title: PS5 jailbreak ready
+      message: The jailbreak finished successfully. Your PS5 is ready.
+      image: "{{ trigger.to_state.attributes.get('preview') or '' }}"
+  - action: script.ps5_autojb_tv_notice
+    data:
+      title: PS5 ready
+      message: Jailbreak complete.
+
+- id: ps5_autojb_progress
+  alias: PS5 auto-jailbreak — progress
+  description: >-
+    Status messages while an automatic pass works: starting, restarting, waking, power cycling. The "wasn't turned
+    off properly" screen asks for X when the TV couldn't press it.
+  mode: queued
+  triggers:
+  - trigger: state
+    entity_id: sensor.ps5_autojb_result
+  conditions:
+  - condition: template
+    value_template: >-
+      {% set steps = ['checking PS5', 'automatic reboot starting', 'automatic retry waiting'] %}
+      {{ trigger.from_state is not none and trigger.to_state is not none
+         and trigger.from_state.state not in ['unknown', 'unavailable']
+         and trigger.from_state.state != trigger.to_state.state
+         and trigger.to_state.attributes.get('source') == 'automatic'
+         and (trigger.to_state.state in steps or trigger.to_state.state.startswith('automatic recovery:')
+              or ((trigger.from_state.state in steps or trigger.from_state.state.startswith('automatic recovery:'))
+                  and trigger.to_state.state in ['automatic launch cancelled', 'already jailbroken'])) }}
+  actions:
+  - variables:
+      state: '{{ trigger.to_state.state }}'
+      needs_x: "{{ state == 'automatic recovery: press X on the PS5' }}"
+      done: "{{ state in ['automatic launch cancelled', 'already jailbroken'] }}"
+      title: >-
+        {{ {'checking PS5': 'PS5 jailbreak starting', 'automatic reboot starting': 'PS5 restarting',
+            'automatic retry waiting': 'PS5 retry queued', 'automatic recovery: waking PS5': 'PS5 waking up',
+            'automatic recovery: power cycling': 'PS5 power cycle',
+            'automatic recovery: press X on the PS5': 'PS5 needs X'}.get(state, 'PS5') }}
+      message: >-
+        {{ {'checking PS5': "Automatic launch is starting. You'll be told when it's ready.",
+            'automatic reboot starting': 'Jailbreak did not finish. Trying one restart, then one more attempt.',
+            'automatic retry waiting': 'The PS5 is back. The jailbreak will retry after 30 seconds on Home.',
+            'automatic recovery: waking PS5': 'The PS5 went off after the jailbreak failed. Waking it with Bluetooth.',
+            'automatic recovery: power cycling': 'The PS5 is not responding. Cycling its power, then waking it.',
+            'automatic recovery: press X on the PS5':
+              "It's showing 'wasn't turned off properly'. Press X on the controller; the jailbreak carries on by itself."
+           }.get(state, '') }}
+  - if:
+    - condition: template
+      value_template: '{{ done }}'
+    then:
+    - action: script.ps5_autojb_notify
+      data: {clear: true}
+    else:
+    - action: script.ps5_autojb_notify
+      data:
+        level: "{{ 'ask' if needs_x else 'status' }}"
+        title: '{{ title }}'
+        message: '{{ message }}'
+    - action: script.ps5_autojb_tv_notice
+      data:
+        title: '{{ title }}'
+        message: '{{ message }}'
+
+- id: ps5_autojb_path_progress
+  alias: PS5 auto-jailbreak — run path progress
+  description: >-
+    A path from paths.json (e.g. Boot Linux) reports each step as a status message, then one done message, or one
+    message that needs you when it stops.
+  mode: queued
+  triggers:
+  - trigger: state
+    entity_id: sensor.ps5_autojb_result
+  conditions:
+  - condition: template
+    value_template: >-
+      {{ trigger.to_state is not none and trigger.from_state is not none
+         and trigger.from_state.state not in ['unknown', 'unavailable']
+         and (trigger.to_state.attributes.get('source') or '').startswith('path:')
+         and (trigger.to_state.state != trigger.from_state.state
+              or trigger.to_state.attributes.get('at') != trigger.from_state.attributes.get('at')) }}
+  actions:
+  - variables:
+      name: "{{ trigger.to_state.attributes.source[5:] | replace('_', ' ') | capitalize }}"
+      state: '{{ trigger.to_state.state }}'
+      done: "{{ state.endswith(' done') }}"
+      failed: "{{ state.startswith('failed:') or state.startswith('refused:') }}"
+      step: "{{ state.split(': ', 1)[1] if ': ' in state else state }}"
+  - action: script.ps5_autojb_notify
+    data:
+      level: "{{ 'done' if done else 'ask' if failed else 'status' }}"
+      title: "{{ 'PS5 · ' ~ name ~ (' is ready' if done else ' stopped' if failed else '') }}"
+      message: >-
+        {{ 'Every step finished.' if done else (step ~ '. Check the PS5.') if failed
+           else (step[:1] | upper) ~ step[1:] ~ '…' }}
+
+- id: ps5_autojb_recovery_step
+  alias: PS5 auto-jailbreak — recovery power step
+  description: >-
+    One fixed step for the launcher after a failed automatic jailbreak left the console down: read the plug, cycle the
+    plug, or press the Bluetooth waker. Fresh (30 s) requests only; the answer goes to ps5_autojb/recover/result.
+    The plug is never cut while the console draws power unless the launcher saw it hung, never in rest mode, and
+    never if someone switched it off.
+  mode: queued
+  max: 5
+  triggers:
+  - trigger: state
+    entity_id: sensor.ps5_autojb_recovery_request
+  conditions:
+  - condition: template
+    value_template: >-
+      {% set to = trigger.to_state %}
+      {{ to is not none and to.state is match('^[a-f0-9]{32}$')
+         and (trigger.from_state is none or trigger.from_state.state != to.state)
+         and to.attributes.get('action') in ['status', 'power_cycle', 'bt_wake']
+         and to.attributes.get('at') is number
+         and -5 <= as_timestamp(now()) - to.attributes.get('at') <= 30 }}
+  actions:
+  - variables:
+      rid: '{{ trigger.to_state.state }}'
+      step: '{{ trigger.to_state.attributes.action }}'
+      hung: "{{ trigger.to_state.attributes.get('hung') is sameas true }}"
+      plug: "{{ states('switch.ps5_power_plug') }}"
+      watts: "{{ states('sensor.ps5_power_plug_current_power') | float(none) }}"
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: "{{ step == 'status' }}"
+      sequence:
+      - action: mqtt.publish
+        data:
+          topic: ps5_autojb/recover/result
+          payload: >-
+            {{ {'id': rid, 'action': step, 'ok': true, 'plug': plug, 'watts': watts,
+                'waker': states('sensor.ps5_bt_waker_status')} | to_json }}
+    - conditions:
+      - condition: template
+        value_template: "{{ step == 'power_cycle' }}"
+      sequence:
+      - if:
+        - condition: template
+          value_template: >-
+            {{ plug != "on" or watts is none or is_state('sensor.ps5_autojb_power', 'rest')
+               or (watts >= 3 and not hung) }}
+        then:
+        - action: mqtt.publish
+          data:
+            topic: ps5_autojb/recover/result
+            payload: >-
+              {{ {'id': rid, 'action': step, 'ok': false,
+                  'message': ('plug is ' ~ plug) if plug != 'on' else 'no power reading' if watts is none
+                             else 'the console reports rest mode' if is_state('sensor.ps5_autojb_power', 'rest')
+                             else 'the console is drawing power'} | to_json }}
+        - stop: Refused
+      - action: switch.turn_off
+        target: {entity_id: switch.ps5_power_plug}
+      - wait_template: "{{ is_state('switch.ps5_power_plug', 'off') }}"
+        timeout: '00:00:10'
+      - delay: '00:00:15'
+      - action: switch.turn_on
+        target: {entity_id: switch.ps5_power_plug}
+      - wait_template: "{{ is_state('switch.ps5_power_plug', 'on') }}"
+        timeout: '00:00:15'
+      - action: mqtt.publish
+        data:
+          topic: ps5_autojb/recover/result
+          payload: >-
+            {% set back = is_state('switch.ps5_power_plug', 'on') %}
+            {{ {'id': rid, 'action': step, 'ok': back, 'watts_before': watts,
+                'message': '' if back else 'the plug did not switch back on'} | to_json }}
+    - conditions:
+      - condition: template
+        value_template: "{{ step == 'bt_wake' }}"
+      sequence:
+      - if:
+        - condition: template
+          value_template: "{{ states('sensor.ps5_bt_waker_status') in ['unavailable', 'unknown'] }}"
+        then:
+        - action: mqtt.publish
+          data:
+            topic: ps5_autojb/recover/result
+            payload: "{{ {'id': rid, 'action': step, 'ok': false, 'status': states('sensor.ps5_bt_waker_status')} | to_json }}"
+        - stop: Waker offline
+      - action: button.press
+        target: {entity_id: button.ps5_bt_waker_power_on}
+      # A result from an earlier wake reads as finished for five seconds; wait for this wake to start first.
+      - wait_template: "{{ is_state('sensor.ps5_bt_waker_status', 'Connecting...') }}"
+        timeout: '00:00:05'
+      - wait_template: "{{ states('sensor.ps5_bt_waker_status') not in ['Ready', 'Connecting...'] }}"
+        timeout: '00:00:15'
+      - variables:
+          status: "{{ states('sensor.ps5_bt_waker_status') if wait.completed else 'no result' }}"
+      - action: mqtt.publish
+        data:
+          topic: ps5_autojb/recover/result
+          payload: "{{ {'id': rid, 'action': step, 'ok': status == 'Success', 'status': status} | to_json }}"

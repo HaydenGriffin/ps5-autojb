@@ -1,0 +1,46 @@
+{
+  "linux": {
+    "button": "Boot Linux",
+    "steps": [
+      {
+        "fresh_boot": {}
+      },
+      {
+        "open": {
+          "tile": "Y2JB - Linux",
+          "also_reads": [
+            "Y2IB - Linux",
+            "Y2)B - Linux",
+            "Y2I)B - Linux"
+          ]
+        }
+      },
+      {
+        "wait": {
+          "console": "rest",
+          "timeout": 120
+        }
+      },
+      {
+        "wait": {
+          "seconds": 45
+        }
+      },
+      {
+        "press_ps": {}
+      },
+      {
+        "wait": {
+          "console": "offline",
+          "timeout": 60
+        }
+      },
+      {
+        "wait": {
+          "watts_above": 100,
+          "timeout": 120
+        }
+      }
+    ]
+  }
+}
