@@ -263,7 +263,7 @@ class Bridge:
 class Console:
     def __init__(self, config, state_dir, report=print):
         self.host = config['host']
-        self.port = config.get('probe_port', 3232)
+        self.port = config.get('probe_port', 9021)  # refree's own default, so both read the same port
         self.base = REMOTE_PLAY_URL
         self.directory, self.report = Path(state_dir), report
         self.deadline = None
@@ -1327,9 +1327,16 @@ def discovery(paths=None):
                 command_topic=f'{PREFIX}/path/{name}', payload_press='PRESS') for name, spec in (paths or {}).items()]
 
 
+def mqtt_client(mqtt):
+    """paho-mqtt 2 (pip) wants the callback API named; 1.6 (Ubuntu's package) has no such argument."""
+    if hasattr(mqtt, 'CallbackAPIVersion'):
+        return mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id='ps5-autojb')
+    return mqtt.Client(client_id='ps5-autojb')
+
+
 def serve(config, directory):
     import paho.mqtt.client as mqtt
-    client = mqtt.Client(client_id='ps5-autojb')
+    client = mqtt_client(mqtt)
     broker = config['mqtt']
     client.username_pw_set(broker['username'], broker['password'])
     client.will_set(PREFIX + '/availability', 'offline', qos=1, retain=True)
@@ -1370,7 +1377,7 @@ def serve(config, directory):
         if saved.exists():
             client.publish(PREFIX + '/result', saved.read_text(), qos=1, retain=True)
 
-    def on_connect(client, userdata, flags, rc):
+    def on_connect(client, userdata, flags, rc, properties=None):
         if rc != 0:
             return
         client.subscribe([(PREFIX + '/launch', 0), (PREFIX + '/auto/set', 0), (PREFIX + '/shutdown', 0),

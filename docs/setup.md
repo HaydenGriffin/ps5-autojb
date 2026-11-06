@@ -23,17 +23,44 @@ Check: restart the PS5 with no controller nearby. It reaches the home screen by 
 
 ## 2. refree
 
-Install [refree](https://gitlab.com/refree/refree) on the Linux machine as its own user (here `refree`, home
-`/var/lib/refree`), and follow its README to pair with the console. Then:
+[refree](https://gitlab.com/refree/refree) does the Remote Play part. It has release tarballs for Linux x86_64 and
+arm64; this was built and run on v0.1.0 for x86_64, and refree notes its arm64 build isn't run in CI. Run it as its
+own user. Here that's `refree` with home `/var/lib/refree`, so its config is
+`/var/lib/refree/.config/refree/config.json`. refree is built and tested on consoles kept off PSN; read the limits in
+its README first.
 
-- Give it an MQTT login on your broker. It stores the login in its `config.json`, which the launcher reads too.
-- Run it with `--no-auto-macro`. The launcher handles boots; refree's own boot macro would press buttons at the
-  same time.
-- Keep its web API (port 8091) on your LAN. It has no login, so don't forward the port.
-- If your jailbreak opens a port other than 3232 once it's done, set `probe_port` in refree's `config.json`.
+The launcher reads the same `config.json`: `host`, `probe_port` and `mqtt`. A minimal one:
 
-Check: `curl http://127.0.0.1:8091/api/config` answers, and the refree page at `http://<machine>:8091/maker` shows the
-PS5's screen when you open a session. Close the session afterwards.
+```json
+{
+  "host": "192.0.2.10",
+  "probe_port": 9021,
+  "web_listen": "0.0.0.0:8091",
+  "mqtt": {"host": "192.0.2.2", "port": 1883, "username": "refree", "password": "..."}
+}
+```
+
+- `host`: the PS5's address. Give it a fixed one in your router.
+- `probe_port`: a port that answers only once the jailbreak has loaded, and that stock firmware never opens. The
+  launcher treats an open port as "jailbroken". refree's default is 9021, the ELF loader port. If your loader opens
+  9021 before your payloads have run, use a port one of your payloads opens instead; this setup uses 3232, the klog
+  server its autoload starts. Set it in `config.json`, not refree's Config page: that page writes
+  `web-overrides.json`, which the launcher doesn't read.
+- `web_listen`: refree's web UI and API are off without it, and the launcher can't work without the API. It has no
+  login, so keep it on your LAN and never forward the port.
+- `mqtt`: a login of its own on your broker. The launcher uses the same one.
+
+Pair it on refree's Pairing page (`http://<machine>:8091/pair`) with the account ID and 8-digit PIN. On a console kept
+off PSN, the LinkDev homebrew shows both; on a signed-in one the PIN is under Settings → System → Remote Play → Link
+Device. If you already paired chiaki-ng, `refree import-chiaki` imports its keys instead.
+
+Run it as a service with `refree run --no-auto-macro`. That serves the web UI and runs no boot macro of its own: the
+launcher handles boots, and both pressing buttons at once would go wrong.
+
+Check: `curl http://127.0.0.1:8091/api/config` answers. Open a session on the Macro maker page
+(`http://<machine>:8091/maker`) and you see the PS5's screen. Close the session afterwards: Remote Play is one session
+at a time, and the launcher can't connect while yours is open. Also check the probe: before a jailbreak,
+`nc -z <ps5> <probe_port>` fails; after one, it succeeds.
 
 ## 3. The launcher
 
@@ -79,6 +106,8 @@ result, Discover titles and Titles.
 
 ## 4. The Home Assistant package
 
+The details, every entity and a dashboard card are in [home-assistant.md](home-assistant.md).
+
 1. Turn on packages in `configuration.yaml` if you haven't (`homeassistant: packages: !include_dir_named packages`).
 2. Copy `homeassistant/ps5_autojb.yaml` to `/config/packages/`.
 3. Edit the `EDIT` lines at the top: your phone's notify service, and your plug and waker entity ids if you'll add them.
@@ -99,6 +128,8 @@ Name its entities `switch.ps5_power_plug` and `sensor.ps5_power_plug_current_pow
 
 Note what it reads in each state. Here: about 0.5 W off, 4 W in rest mode, 60 to 200 W running. `off_watts` must sit
 between off and rest, and `hung_watts` above rest. The plug never cuts power between those two, so rest mode is safe.
+The package has its own guard too: it refuses a power cut at 3 W or more unless the launcher reports the console
+hung. If your plug reads 3 W or more with the console off, raise that `3` in `ps5_autojb_recovery_step`.
 
 Check: the power sensor follows the console as you put it into rest mode and wake it again.
 

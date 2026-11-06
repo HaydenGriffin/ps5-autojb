@@ -72,3 +72,27 @@ def test_preview_link_uses_the_public_url(M, tmp_path, monkeypatch):
     monkeypatch.setattr(c, 'close', lambda: None)
     monkeypatch.setattr(c, 'snapshot', lambda: b'png')
     assert c.ready_preview().startswith('http://helper.lan:8091/api/screenshots/autojb-ready.png?v=')
+
+
+def test_probe_port_defaults_to_refrees_own_default(M, tmp_path):
+    """Without probe_port in refree's config.json, refree probes 9021, so the launcher must too."""
+    assert M.Console({'host': '192.0.2.5'}, tmp_path).port == 9021
+    assert M.Console({'host': '192.0.2.5', 'probe_port': 3232}, tmp_path).port == 3232
+
+
+class FakePaho:
+    def __init__(self, v2):
+        if v2:
+            self.CallbackAPIVersion = type('CallbackAPIVersion', (), {'VERSION2': 'v2'})
+        self.made = []
+
+    def Client(self, *args, **kwargs):
+        self.made.append((args, kwargs))
+        return object()
+
+
+@pytest.mark.parametrize('v2, args', [(True, ('v2',)), (False, ())])
+def test_mqtt_client_works_with_paho_1_and_2(M, v2, args):
+    paho = FakePaho(v2)
+    M.mqtt_client(paho)
+    assert paho.made == [(args, {'client_id': 'ps5-autojb'})]

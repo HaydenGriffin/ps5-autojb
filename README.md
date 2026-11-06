@@ -1,5 +1,7 @@
 # ps5-autojb
 
+![ps5-autojb: the PS5 Media row with Y2JB - Gaming selected, the PS5 Power menu, and the PS5 jailbreak ready notification on Android](docs/images/banner.png)
+
 Keeps a jailbroken PS5 ready without anyone at the console. When the PS5 boots, ps5-autojb opens your jailbreak app
 over Remote Play, finding it by the name on screen rather than its position. If the jailbreak crashes the console, it
 brings it back: a Bluetooth wake, a smart-plug power cycle if needed, and an X press from the TV over HDMI-CEC to clear
@@ -10,10 +12,6 @@ wait for rest mode, and a PS button press. All of that runs from one button.
 
 It is built on [refree](https://gitlab.com/refree/refree), which handles Remote Play. There is no exploit code or
 payload in this repo; it opens apps that are already on your console.
-
-<img src="docs/images/android-ready.png" alt="Android notification: PS5 jailbreak ready. The jailbreak finished successfully. Your PS5 is ready. Below it, a screenshot of the PS5 after the jailbreak" width="440">
-
-The ready notification on an Android phone, with the PS5's screen when the jailbreak confirmed.
 
 ## What it does
 
@@ -27,7 +25,7 @@ The ready notification on an Android phone, with the PS5's screen when the jailb
 - **Clear the warning screen.** After a power cut the PS5 waits for X on "Your PS5 wasn't turned off properly", and
   Remote Play doesn't work until then. A rooted LG TV sends X over HDMI-CEC, whatever input it's showing.
 - **Run paths.** Named step lists in `paths.json`, each a Home Assistant button. See [Run paths](#run-paths).
-- **Tell you.** Each step is a phone notification; the ready one has a screenshot and a Play on TV button.
+- **Tell you.** Each step is a phone notification; the ready one has a screenshot of the console.
 
 Limits survive restarts: three failed launches in 30 minutes, one restart per 30 minutes, power recovery once in two
 hours. Turning off Automatic jailbreak cancels anything in progress.
@@ -109,10 +107,10 @@ count as the tile's name, which matters because this font's J often reads as I o
 
 | | |
 |---|---|
-| ![Media row with Y2JB - Gaming selected](docs/images/ps5-media.png) | ![Power menu with Turn Off PS5 selected](docs/images/ps5-power.png) |
-| The title under the row is what OCR reads. | The Power menu. The selected row shows its description. |
-| ![Y2JB autoload log over Payload Manager](docs/images/ps5-autoload.png) | |
-| After the jailbreak. This frame is the picture in the notification. | |
+| ![Media row with Y2JB - Gaming selected](docs/images/ps5-media.png) | ![Power menu with Restart PS5 selected, shown only by its description line](docs/images/ps5-restart.png) |
+| The title under the row is what OCR reads. | Restart PS5 selected. There's no outline here: only the description line under it shows the selection. |
+| ![Power menu with Turn Off PS5 selected](docs/images/ps5-power.png) | ![Y2JB autoload log over Payload Manager](docs/images/ps5-autoload.png) |
+| Turn Off PS5 selected, for a full shutdown. | After the jailbreak. This frame is the picture in the notification. |
 
 These are Remote Play frames at their real size, 640×360.
 
@@ -133,6 +131,7 @@ whatever your TV shows ([docs/notifications.md](docs/notifications.md#on-the-tv)
 
 ## More
 
+- [docs/home-assistant.md](docs/home-assistant.md): every entity, the package, and a dashboard card.
 - [docs/how-it-works.md](docs/how-it-works.md): the launch, the recovery, the limits, and what went wrong while testing.
 - [docs/notifications.md](docs/notifications.md): every notification and button.
 

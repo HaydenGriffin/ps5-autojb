@@ -1,5 +1,6 @@
 """The Home Assistant package parses, uses the launcher's discovery ids and the default MQTT prefix."""
 import importlib.util
+import json
 import re
 from pathlib import Path
 
@@ -37,3 +38,25 @@ def test_topics_use_the_default_prefix_and_automation_ids_are_unique():
 def test_selectors_are_never_empty_dicts():
     # Home Assistant's package merge drops empty dicts; a field selector of {} arrives empty.
     assert '{}' not in TEXT.replace('sequence: []', '')
+
+
+def test_docs_name_only_entities_that_exist_and_their_yaml_parses():
+    """The docs (entity tables, the dashboard card, the TV example) can't drift from the launcher and the package."""
+    discovered = {config['default_entity_id'] for _, config in M.discovery(json.loads(
+        (ROOT / 'launcher/paths.example.json').read_text()))}
+    own = {s['default_entity_id'] for s in PACKAGE['mqtt']['sensor']} | {f'script.{k}' for k in PACKAGE['script']}
+    docs = [ROOT / 'README.md', ROOT / 'llms.txt', *sorted((ROOT / 'docs').rglob('*.md'))]
+    for doc in docs:
+        text = doc.read_text()
+        used = set(re.findall(r'\b(?:sensor|binary_sensor|button|switch|script)\.ps5_autojb_[a-z_]+', text))
+        used = {u for u in used if not u.endswith('_path_')}  # the button.ps5_autojb_path_<name> pattern
+        assert used <= discovered | own | HARDWARE, (doc.name, used - discovered - own)
+        for block in re.findall(r'```yaml\n(.*?)```', text, re.S):
+            yaml.load(block, HaLoader)
+
+
+class HaLoader(yaml.SafeLoader):
+    """Accepts Home Assistant's tags (!include_dir_named, !secret) as plain values."""
+
+
+HaLoader.add_multi_constructor('!', lambda loader, tag, node: loader.construct_scalar(node))

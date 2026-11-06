@@ -10,7 +10,11 @@ Notes for an assistant helping someone set this up:
 - Follow docs/setup.md in order and run each step's check before the next one. Steps 1 to 4 are the minimum; 5 to 8
   are optional.
 - The repo contains no exploit or payload. The user's PS5 must already jailbreak from an app on its home screen.
-- refree must run with `--no-auto-macro`, and its web API (port 8091) has no login: keep it on the LAN.
+- refree must run with `--no-auto-macro`, and needs `web_listen` (e.g. `0.0.0.0:8091`) in its `config.json`: its
+  web API is off without it, and the launcher depends on it. The API has no login: keep it on the LAN.
+- `probe_port` in refree's `config.json` (default 9021) must answer only once the jailbreak has loaded. The launcher
+  reads `host`, `probe_port` and `mqtt` from that file, not from refree's web overrides.
+- Pairing is on refree's `/pair` page (account ID and PIN; LinkDev on consoles kept off PSN) or `refree import-chiaki`.
 - `autojb.json` refuses unknown keys. `target_name` must match the tile's title as the PS5 displays it.
 - Never suggest cutting power to a console in rest mode. The launcher won't: it cuts power only under `off_watts` or
   over `hung_watts` (a console silent for three minutes), and rest mode sits between them.
@@ -24,6 +28,7 @@ Notes for an assistant helping someone set this up:
 
 - [README](README.md): what it does, the parts, run path steps, limitations
 - [Setup](docs/setup.md): step by step, with a check after each step
+- [Home Assistant](docs/home-assistant.md): every entity and result state, the package's scripts and automations, the power-step refusals, a dashboard card
 - [How it works](docs/how-it-works.md): one automatic pass, the failure handling, the durable limits, lessons from testing
 - [Notifications](docs/notifications.md): every message, its button, and the TV notice hook
 
